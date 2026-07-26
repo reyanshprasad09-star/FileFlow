@@ -248,8 +248,9 @@ class FileFlow(tk.Tk):
         except Exception:
             pass
 
-        self.create_styles()
+        # FIXED: Variables must be initialized BEFORE styles/widgets!
         self.create_variables()
+        self.create_styles()
 
     # ------------------------------------------------------
     # Variables
