@@ -1,546 +1,1020 @@
 import os
 import shutil
+import logging
+import traceback
+from collections import defaultdict
+from pathlib import Path
+
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-from collections import defaultdict
 
-# ==========================================
-# FileFlow v0.2.0
-# Preview Mode Update
-# ==========================================
+# ==========================================================
+# FileFlow v1.0
+# Smart File Organizer
+# ==========================================================
 
-TOPIC_KEYWORDS = {
+APP_NAME = "FileFlow"
+APP_VERSION = "1.0"
+
+logging.basicConfig(
+    filename="fileflow.log",
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s"
+)
+
+# ----------------------------------------------------------
+# Supported Extensions
+# ----------------------------------------------------------
+
+CATEGORY_EXTENSIONS = {
+
+    "Images": {
+        ".png", ".jpg", ".jpeg", ".bmp",
+        ".gif", ".tiff", ".webp", ".ico",
+        ".svg"
+    },
+
+    "Videos": {
+        ".mp4", ".avi", ".mov",
+        ".mkv", ".wmv", ".flv",
+        ".webm"
+    },
+
+    "Music": {
+        ".mp3", ".wav", ".aac",
+        ".ogg", ".flac", ".m4a"
+    },
+
+    "Documents": {
+        ".pdf", ".doc", ".docx",
+        ".txt", ".rtf", ".odt",
+        ".ppt", ".pptx",
+        ".xls", ".xlsx",
+        ".csv"
+    },
+
+    "Archives": {
+        ".zip", ".rar",
+        ".7z", ".tar",
+        ".gz", ".iso"
+    },
+
+    "Programs": {
+        ".exe", ".msi",
+        ".apk", ".bat",
+        ".cmd", ".jar"
+    },
+
+    "Code": {
+        ".py", ".cpp", ".c",
+        ".cs", ".java",
+        ".js", ".ts",
+        ".html", ".css",
+        ".json", ".xml",
+        ".sql", ".php",
+        ".swift", ".kt",
+        ".go", ".rs"
+    }
+
+}
+
+# ----------------------------------------------------------
+# Filename Keywords
+# ----------------------------------------------------------
+
+KEYWORDS = {
+
     "School": [
-        "math", "science", "history", "physics",
-        "chemistry", "biology", "assignment", "project"
+
+        "homework",
+        "assignment",
+        "math",
+        "science",
+        "biology",
+        "chemistry",
+        "physics",
+        "history",
+        "geography",
+        "english",
+        "computer",
+        "project",
+        "notes",
+        "worksheet",
+        "exam",
+        "test",
+        "class"
+
     ],
 
-    "Programming": [
-        "python", "java", "code",
-        "javascript", "cpp", "html", "css"
+    "Finance": [
+
+        "invoice",
+        "receipt",
+        "salary",
+        "tax",
+        "bank",
+        "payment",
+        "upi",
+        "bill",
+        "gst"
+
     ],
 
-    "Music": [
-        "song", "album", "phonk",
-        "music", "track"
+    "Screenshots": [
+
+        "screenshot",
+        "screen shot",
+        "snip",
+        "capture"
+
     ],
 
-    "Games": [
-        "game", "minecraft",
-        "roblox", "valorant", "steam"
+    "Downloads": [
+
+        "download",
+        "installer",
+        "setup"
+
     ],
 
-    "Images": [
-        "photo", "image",
-        "screenshot", "wallpaper"
-    ],
+    "Design": [
 
-    "Videos": [
-        "video", "movie",
-        "clip", "episode"
-    ],
+        "logo",
+        "poster",
+        "banner",
+        "mockup",
+        "thumbnail",
+        "icon"
 
-    "Documents": [
-        "report", "notes",
-        "invoice", "receipt",
-        "resume"
     ]
+
 }
 
-EXTENSION_FALLBACK = {
+# ----------------------------------------------------------
+# Utility Functions
+# ----------------------------------------------------------
 
-    ".jpg": "Images",
-    ".jpeg": "Images",
-    ".png": "Images",
-
-    ".gif": "Images",
-    ".bmp": "Images",
-
-    ".mp4": "Videos",
-    ".mkv": "Videos",
-    ".avi": "Videos",
-
-    ".mp3": "Music",
-    ".wav": "Music",
-    ".flac": "Music",
-
-    ".pdf": "Documents",
-    ".docx": "Documents",
-    ".doc": "Documents",
-    ".txt": "Documents",
-    ".pptx": "Documents",
-    ".xlsx": "Documents"
-}
-
-selected_folder = ""
-preview_files = []
-
-
-def classify(filename):
+def safe_filename(name: str) -> str:
     """
-    Returns category based on filename.
+    Removes invalid filename characters.
     """
 
-    lower = filename.lower()
+    invalid = '<>:"/\\|?*'
 
-    for category, keywords in TOPIC_KEYWORDS.items():
+    for ch in invalid:
+        name = name.replace(ch, "_")
 
-        for keyword in keywords:
+    return name.strip()
 
-            if keyword in lower:
+
+def unique_destination(path: Path) -> Path:
+    """
+    Prevent overwriting.
+    """
+
+    if not path.exists():
+        return path
+
+    counter = 1
+
+    while True:
+
+        new_name = (
+            f"{path.stem} ({counter}){path.suffix}"
+        )
+
+        candidate = path.with_name(new_name)
+
+        if not candidate.exists():
+            return candidate
+
+        counter += 1
+
+
+# ----------------------------------------------------------
+# Smart Categorization
+# ----------------------------------------------------------
+
+def categorize_file(filepath: Path) -> str:
+    """
+    Decide the destination folder using both
+    filename keywords and extension.
+    """
+
+    filename = filepath.name.lower()
+
+    # Priority 1:
+    # Keyword-based classification
+
+    for category, words in KEYWORDS.items():
+
+        for word in words:
+
+            if word in filename:
                 return category
 
-    extension = os.path.splitext(lower)[1]
+    # Priority 2:
+    # Extension-based classification
 
-    return EXTENSION_FALLBACK.get(
-        extension,
-        "Others"
-    )
+    extension = filepath.suffix.lower()
 
+    for category, extensions in CATEGORY_EXTENSIONS.items():
 
-def clear_preview():
+        if extension in extensions:
+            return category
 
-    preview_tree.delete(*preview_tree.get_children())
+    # Priority 3:
+    # Empty extension
 
-    preview_files.clear()
+    if extension == "":
+        return "No Extension"
 
-    organize_button.config(
-        state="disabled"
-    )
-
-
-def generate_preview(folder):
-
-    clear_preview()
-
-    total = 0
-
-    for item in sorted(os.listdir(folder)):
-
-        full_path = os.path.join(folder, item)
-
-        if os.path.isfile(full_path):
-
-            category = classify(item)
-
-            preview_files.append(
-                (item, category)
-            )
-
-            preview_tree.insert(
-                "",
-                tk.END,
-                values=(
-                    item,
-                    category
-                )
-            )
-
-            total += 1
-
-    status_label.config(
-        text=f"Ready to organize {total} files."
-    )
-
-    if total > 0:
-
-        organize_button.config(
-            state="normal"
-        )
+    return "Others"
 
 
-def choose_folder():
+# ----------------------------------------------------------
+# Main Application
+# ----------------------------------------------------------
 
-    global selected_folder
+class FileFlow(tk.Tk):
 
-    folder = filedialog.askdirectory()
+    def __init__(self):
 
-    if not folder:
-        return
+        super().__init__()
 
-    selected_folder = folder
+        self.title(f"{APP_NAME} {APP_VERSION}")
 
-    folder_label.config(
-        text=f"📂 {folder}"
-    )
+        self.geometry("1100x700")
 
-    def organize_files():
+        self.minsize(900, 600)
 
-    if not selected_folder:
-        return
+        self.preview_data = []
 
-    moved = defaultdict(int)
+        self.summary = defaultdict(int)
 
-    failed = []
+        self.selected_folder = None
 
-    total = 0
-
-    for filename, category in preview_files:
-
-        source = os.path.join(
-            selected_folder,
-            filename
-        )
-
-        destination_folder = os.path.join(
-            selected_folder,
-            category
-        )
-
-        os.makedirs(
-            destination_folder,
-            exist_ok=True
-        )
-
-        destination = os.path.join(
-            destination_folder,
-            filename
-        )
+        self.preview_completed = False
 
         try:
 
-            shutil.move(
-                source,
-                destination
+            if os.path.exists("FileFlow.ico"):
+                self.iconbitmap("FileFlow.ico")
+
+        except Exception:
+            pass
+
+        self.create_styles()
+        self.create_variables()
+
+    # ------------------------------------------------------
+    # Variables
+    # ------------------------------------------------------
+
+    def create_variables(self):
+
+        self.folder_var = tk.StringVar(value="No folder selected")
+        self.status_var = tk.StringVar(value="Ready")
+
+    # ------------------------------------------------------
+    # Styling
+    # ------------------------------------------------------
+
+    def create_styles(self):
+
+        style = ttk.Style(self)
+
+        try:
+            style.theme_use("vista")
+        except tk.TclError:
+            try:
+                style.theme_use("clam")
+            except tk.TclError:
+                pass
+
+        self.configure(bg="#f3f3f3")
+
+        style.configure(
+            "Title.TLabel",
+            font=("Segoe UI", 22, "bold"),
+            background="#f3f3f3"
+        )
+
+        style.configure(
+            "Subtitle.TLabel",
+            font=("Segoe UI", 10),
+            background="#f3f3f3",
+            foreground="#555555"
+        )
+
+        style.configure(
+            "Status.TLabel",
+            font=("Segoe UI", 9),
+            background="#f3f3f3"
+        )
+
+        style.configure(
+            "Summary.TLabelframe",
+            font=("Segoe UI", 10, "bold")
+        )
+
+        style.configure(
+            "Treeview",
+            font=("Segoe UI", 10),
+            rowheight=26
+        )
+
+        style.configure(
+            "Treeview.Heading",
+            font=("Segoe UI", 10, "bold")
+        )
+
+        style.configure(
+            "Accent.TButton",
+            font=("Segoe UI", 10, "bold"),
+            padding=8
+        )
+
+        style.map(
+            "Accent.TButton",
+            background=[("active", "#0078D7")]
+        )
+
+        self.create_widgets()
+
+    # ------------------------------------------------------
+    # UI
+    # ------------------------------------------------------
+
+    def create_widgets(self):
+
+        # ===========================
+        # Header
+        # ===========================
+
+        header = ttk.Frame(self)
+        header.pack(fill="x", padx=20, pady=15)
+
+        ttk.Label(
+            header,
+            text="FileFlow",
+            style="Title.TLabel"
+        ).pack(anchor="w")
+
+        ttk.Label(
+            header,
+            text="Smart File Organizer",
+            style="Subtitle.TLabel"
+        ).pack(anchor="w")
+
+        # ===========================
+        # Toolbar
+        # ===========================
+
+        toolbar = ttk.Frame(self)
+        toolbar.pack(fill="x", padx=20, pady=(0, 10))
+
+        self.select_btn = ttk.Button(
+            toolbar,
+            text="📁 Select Folder",
+            command=self.select_folder,
+            style="Accent.TButton"
+        )
+
+        self.select_btn.pack(side="left")
+
+        self.preview_btn = ttk.Button(
+            toolbar,
+            text="👀 Preview",
+            command=self.preview_files,
+            style="Accent.TButton"
+        )
+
+        self.preview_btn.pack(
+            side="left",
+            padx=6
+        )
+
+        self.organize_btn = ttk.Button(
+            toolbar,
+            text="🚀 Organize",
+            command=self.organize_files,
+            state="disabled",
+            style="Accent.TButton"
+        )
+
+        self.organize_btn.pack(
+            side="left"
+        )
+
+        # ===========================
+        # Selected Folder
+        # ===========================
+
+        folder_frame = ttk.Frame(self)
+        folder_frame.pack(
+            fill="x",
+            padx=20,
+            pady=(0, 10)
+        )
+
+        ttk.Label(
+            folder_frame,
+            textvariable=self.folder_var,
+            font=("Segoe UI", 10)
+        ).pack(anchor="w")
+
+        # ===========================
+        # Main Area
+        # ===========================
+
+        main = ttk.Frame(self)
+        main.pack(
+            fill="both",
+            expand=True,
+            padx=20,
+            pady=10
+        )
+
+        # Treeview
+
+        tree_frame = ttk.Frame(main)
+        tree_frame.pack(
+            side="left",
+            fill="both",
+            expand=True
+        )
+
+        columns = (
+            "Name",
+            "Category",
+            "Destination"
+        )
+
+        self.tree = ttk.Treeview(
+            tree_frame,
+            columns=columns,
+            show="headings",
+            selectmode="browse"
+        )
+
+        self.tree.heading(
+            "Name",
+            text="Filename"
+        )
+
+        self.tree.heading(
+            "Category",
+            text="Category"
+        )
+
+        self.tree.heading(
+            "Destination",
+            text="Destination Folder"
+        )
+
+        self.tree.column(
+            "Name",
+            width=350
+        )
+
+        self.tree.column(
+            "Category",
+            width=150,
+            anchor="center"
+        )
+
+        self.tree.column(
+            "Destination",
+            width=220,
+            anchor="center"
+        )
+
+        scrollbar = ttk.Scrollbar(
+            tree_frame,
+            orient="vertical",
+            command=self.tree.yview
+        )
+
+        self.tree.configure(
+            yscrollcommand=scrollbar.set
+        )
+
+        self.tree.pack(
+            side="left",
+            fill="both",
+            expand=True
+        )
+
+        scrollbar.pack(
+            side="right",
+            fill="y"
+        )
+
+        # ===========================
+        # Summary Panel
+        # ===========================
+
+        summary_frame = ttk.LabelFrame(
+            main,
+            text="Organization Summary",
+            style="Summary.TLabelframe",
+            width=250
+        )
+
+        summary_frame.pack(
+            side="right",
+            fill="y",
+            padx=(12, 0)
+        )
+
+        self.summary_text = tk.Text(
+            summary_frame,
+            width=28,
+            height=25,
+            relief="flat",
+            font=("Consolas", 10),
+            bg="#FAFAFA"
+        )
+
+        self.summary_text.pack(
+            fill="both",
+            expand=True,
+            padx=8,
+            pady=8
+        )
+
+        self.summary_text.configure(
+            state="disabled"
+        )
+
+        # ===========================
+        # Status Bar
+        # ===========================
+
+        status = ttk.Label(
+            self,
+            textvariable=self.status_var,
+            relief="sunken",
+            anchor="w",
+            style="Status.TLabel"
+        )
+
+        status.pack(
+            side="bottom",
+            fill="x"
+        )
+
+    # ------------------------------------------------------
+    # Folder Selection
+    # ------------------------------------------------------
+
+    def select_folder(self):
+
+        folder = filedialog.askdirectory(
+            title="Select Folder to Organize"
+        )
+
+        if not folder:
+            return
+
+        self.selected_folder = Path(folder)
+
+        self.folder_var.set(str(self.selected_folder))
+
+        self.preview_completed = False
+
+        self.organize_btn.config(state="disabled")
+
+        self.tree.delete(*self.tree.get_children())
+
+        self.summary.clear()
+
+        self.update_summary()
+
+        self.status_var.set(
+            f"Selected folder: {self.selected_folder}"
+        )
+
+    # ------------------------------------------------------
+    # Preview Mode
+    # ------------------------------------------------------
+
+    def preview_files(self):
+
+        if not self.selected_folder:
+
+            messagebox.showwarning(
+                APP_NAME,
+                "Please select a folder first."
             )
 
-            moved[category] += 1
-            total += 1
+            return
 
-        except Exception as error:
+        self.tree.delete(*self.tree.get_children())
 
-            failed.append(
-                (
-                    filename,
-                    str(error)
+        self.summary.clear()
+
+        self.preview_data.clear()
+
+        files_found = 0
+
+        try:
+
+            for item in self.selected_folder.iterdir():
+
+                if not item.is_file():
+                    continue
+
+                category = categorize_file(item)
+
+                destination = self.selected_folder / category
+
+                self.preview_data.append({
+
+                    "source": item,
+                    "category": category,
+                    "destination": destination
+
+                })
+
+                self.summary[category] += 1
+
+                self.tree.insert(
+                    "",
+                    "end",
+                    values=(
+
+                        item.name,
+                        category,
+                        destination.name
+
+                    )
+
                 )
+
+                files_found += 1
+
+            self.update_summary()
+
+            self.preview_completed = True
+
+            self.organize_btn.config(state="normal")
+
+            self.status_var.set(
+                f"Preview complete • {files_found} files"
             )
 
-    clear_preview()
+            if files_found == 0:
 
-    folder_label.config(
-        text="No folder selected."
-    )
+                messagebox.showinfo(
+                    APP_NAME,
+                    "No files found in the selected folder."
+                )
 
-    summary = []
+        except Exception as e:
 
-    summary.append(
-        "Organization Complete!\n"
-    )
+            logging.exception(e)
 
-    for category in sorted(moved):
+            messagebox.showerror(
+                APP_NAME,
+                f"Preview failed.\n\n{e}"
+            )
 
-        summary.append(
-            f"{category}: {moved[category]}"
+    # ------------------------------------------------------
+    # Summary Panel
+    # ------------------------------------------------------
+
+    def update_summary(self):
+
+        self.summary_text.configure(state="normal")
+
+        self.summary_text.delete("1.0", tk.END)
+
+        total = sum(self.summary.values())
+
+        self.summary_text.insert(
+            tk.END,
+            f"Total Files : {total}\n\n"
         )
 
-    summary.append("")
-    summary.append(
-        f"Total Files Organized: {total}"
-    )
+        if total == 0:
 
-    if failed:
+            self.summary_text.insert(
+                tk.END,
+                "Nothing to preview."
+            )
 
-        summary.append("")
-        summary.append(
-            f"Failed Files: {len(failed)}"
+        else:
+
+            for category in sorted(self.summary):
+
+                count = self.summary[category]
+
+                self.summary_text.insert(
+
+                    tk.END,
+
+                    f"{category:<18} {count}\n"
+
+                )
+
+        self.summary_text.configure(state="disabled")
+
+    # ------------------------------------------------------
+    # Organize Files
+    # ------------------------------------------------------
+
+    def organize_files(self):
+
+        if not self.preview_completed:
+
+            messagebox.showwarning(
+                APP_NAME,
+                "Please run Preview before organizing."
+            )
+            return
+
+        moved = 0
+        skipped = 0
+        failed = 0
+
+        self.status_var.set("Organizing files...")
+        self.update_idletasks()
+
+        try:
+
+            for item in self.preview_data:
+
+                source = item["source"]
+                destination_folder = item["destination"]
+
+                try:
+
+                    # Skip if file disappeared
+                    if not source.exists():
+                        skipped += 1
+                        continue
+
+                    # Create destination folder
+                    destination_folder.mkdir(
+                        parents=True,
+                        exist_ok=True
+                    )
+
+                    destination = destination_folder / source.name
+
+                    # Prevent overwriting
+                    destination = unique_destination(destination)
+
+                    shutil.move(
+                        str(source),
+                        str(destination)
+                    )
+
+                    moved += 1
+
+                except Exception as e:
+
+                    failed += 1
+
+                    logging.exception(
+                        "Failed moving %s",
+                        source
+                    )
+
+            self.status_var.set(
+                f"Finished • {moved} moved"
+            )
+
+            messagebox.showinfo(
+
+                APP_NAME,
+
+                (
+                    "Organization Complete!\n\n"
+                    f"Moved : {moved}\n"
+                    f"Skipped : {skipped}\n"
+                    f"Failed : {failed}"
+                )
+
+            )
+
+            # Refresh Preview
+            self.preview_completed = False
+            self.organize_btn.config(state="disabled")
+
+            self.preview_files()
+
+        except Exception as e:
+
+            logging.exception(e)
+
+            traceback.print_exc()
+
+            messagebox.showerror(
+                APP_NAME,
+                f"Unexpected error.\n\n{e}"
+            )
+
+    # ------------------------------------------------------
+    # Refresh Preview
+    # ------------------------------------------------------
+
+    def refresh_preview(self):
+
+        if self.selected_folder:
+            self.preview_files()
+
+    # ------------------------------------------------------
+    # Clear Preview
+    # ------------------------------------------------------
+
+    def clear_preview(self):
+
+        self.tree.delete(*self.tree.get_children())
+
+        self.summary.clear()
+
+        self.preview_data.clear()
+
+        self.preview_completed = False
+
+        self.organize_btn.config(state="disabled")
+
+        self.update_summary()
+
+        self.status_var.set("Preview cleared")
+
+    # ------------------------------------------------------
+    # Utility
+    # ------------------------------------------------------
+
+    def selected_item(self):
+
+        selection = self.tree.selection()
+
+        if not selection:
+            return None
+
+        return self.tree.item(selection[0], "values")
+
+    def preview_destination(self, event=None):
+
+        item = self.selected_item()
+
+        if item is None:
+            return
+
+        filename, category, destination = item
+
+        messagebox.showinfo(
+
+            "Destination Preview",
+
+            (
+                f"Filename:\n{filename}\n\n"
+                f"Will be moved to:\n"
+                f"{self.selected_folder / destination}"
+            )
+
         )
 
-    messagebox.showinfo(
-        "FileFlow",
-        "\n".join(summary)
-    )
-
-    status_label.config(
-        text="Ready"
-    )
-
-
-def exit_app():
-
-    root.destroy()
-
-
-def about():
-
-    messagebox.showinfo(
-        "About FileFlow",
-        "FileFlow v0.2.0\n\n"
-        "Organize files by understanding\n"
-        "their filenames before moving them.\n\n"
-        "© 2026 Reyansh Prasad"
-    )
-
-    # =====================================================
-# MAIN WINDOW
-# =====================================================
-
-root = tk.Tk()
-
-root.title("FileFlow")
-root.geometry("760x520")
-root.minsize(760, 520)
-
-style = ttk.Style()
-
-try:
-    style.theme_use("vista")
-except:
-    pass
-
-# -----------------------------------------------------
-
-title = ttk.Label(
-    root,
-    text="FileFlow",
-    font=("Segoe UI", 24, "bold")
-)
-
-title.pack(pady=(18, 0))
-
-subtitle = ttk.Label(
-    root,
-    text="Preview files before organizing them",
-    font=("Segoe UI", 10)
-)
-
-subtitle.pack(pady=(0, 18))
-
-# -----------------------------------------------------
-
-top_frame = ttk.Frame(root)
-
-top_frame.pack(
-    fill="x",
-    padx=20
-)
-
-select_button = ttk.Button(
-    top_frame,
-    text="📂 Select Folder",
-    command=choose_folder
-)
-
-select_button.pack(
-    side="left"
-)
-
-organize_button = ttk.Button(
-    top_frame,
-    text="🚀 Organize Files",
-    command=organize_files,
-    state="disabled"
-)
-
-organize_button.pack(
-    side="left",
-    padx=10
-)
-
-about_button = ttk.Button(
-    top_frame,
-    text="About",
-    command=about
-)
-
-about_button.pack(
-    side="right"
-)
-
-# -----------------------------------------------------
-
-folder_label = ttk.Label(
-    root,
-    text="No folder selected.",
-    font=("Segoe UI", 10)
-)
-
-folder_label.pack(
-    anchor="w",
-    padx=20,
-    pady=(12, 5)
-)
-
-# =====================================================
-# PREVIEW TABLE
-# =====================================================
-
-table_frame = ttk.Frame(root)
-
-table_frame.pack(
-    fill="both",
-    expand=True,
-    padx=20,
-    pady=5
-)
-
-columns = (
-    "filename",
-    "category"
-)
-
-preview_tree = ttk.Treeview(
-    table_frame,
-    columns=columns,
-    show="headings"
-)
-
-preview_tree.heading(
-    "filename",
-    text="File"
-)
-
-preview_tree.heading(
-    "category",
-    text="Destination Folder"
-)
-
-preview_tree.column(
-    "filename",
-    width=470,
-    anchor="w"
-)
-
-preview_tree.column(
-    "category",
-    width=220,
-    anchor="center"
-)
-
-scrollbar = ttk.Scrollbar(
-    table_frame,
-    orient="vertical",
-    command=preview_tree.yview
-)
-
-preview_tree.configure(
-    yscrollcommand=scrollbar.set
-)
-
-preview_tree.pack(
-    side="left",
-    fill="both",
-    expand=True
-)
-
-scrollbar.pack(
-    side="right",
-    fill="y"
-)
-
-# =====================================================
-# STATUS BAR
-# =====================================================
-
-status_label = ttk.Label(
-    root,
-    text="Ready",
-    relief="sunken",
-    anchor="w"
-)
-
-status_label.pack(
-    fill="x",
-    side="bottom"
-)
-
-# =====================================================
-# KEYBOARD SHORTCUTS
-# =====================================================
-
-def refresh_preview(event=None):
-    """
-    Regenerate the preview for the currently selected folder.
-    """
-    if selected_folder:
-        generate_preview(selected_folder)
-
-
-root.bind("<Control-o>", lambda event: choose_folder())
-root.bind("<F5>", refresh_preview)
-root.bind("<Escape>", lambda event: exit_app())
-
-# =====================================================
-# RIGHT CLICK MENU (Preview Table)
-# =====================================================
-
-menu = tk.Menu(root, tearoff=0)
-
-
-def copy_filename():
-    selected = preview_tree.selection()
-
-    if not selected:
-        return
-
-    filename = preview_tree.item(
-        selected[0],
-        "values"
-    )[0]
-
-    root.clipboard_clear()
-    root.clipboard_append(filename)
-
-
-menu.add_command(
-    label="Copy File Name",
-    command=copy_filename
-)
-
-
-def show_context_menu(event):
-
-    row = preview_tree.identify_row(event.y)
-
-    if row:
-
-        preview_tree.selection_set(row)
-
-        menu.tk_popup(
-            event.x_root,
-            event.y_root
+    # ------------------------------------------------------
+    # Context Menu
+    # ------------------------------------------------------
+
+    def create_context_menu(self):
+
+        self.context_menu = tk.Menu(
+            self,
+            tearoff=False
         )
 
+        self.context_menu.add_command(
+            label="Copy Filename",
+            command=self.copy_filename
+        )
 
-preview_tree.bind(
-    "<Button-3>",
-    show_context_menu
-)
+        self.tree.bind(
+            "<Button-3>",
+            self.show_context_menu
+        )
 
-# =====================================================
-# DOUBLE CLICK
-# =====================================================
+        self.tree.bind(
+            "<Double-1>",
+            self.preview_destination
+        )
 
-def show_category(event):
+    def show_context_menu(self, event):
 
-    selected = preview_tree.selection()
+        item = self.tree.identify_row(event.y)
 
-    if not selected:
-        return
+        if item:
 
-    values = preview_tree.item(
-        selected[0],
-        "values"
-    )
+            self.tree.selection_set(item)
 
-    messagebox.showinfo(
-        "Preview",
-        f"{values[0]}\n\nWill be moved to:\n{values[1]}"
-    )
+            self.context_menu.tk_popup(
+                event.x_root,
+                event.y_root
+            )
 
+    def copy_filename(self):
 
-preview_tree.bind(
-    "<Double-1>",
-    show_category
-)
+        item = self.selected_item()
 
-# =====================================================
-# STARTUP MESSAGE
-# =====================================================
+        if item is None:
+            return
 
-status_label.config(
-    text="Welcome to FileFlow v0.2.0"
-)
+        filename = item[0]
 
-root.mainloop()
-    generate_preview(folder)
+        self.clipboard_clear()
+
+        self.clipboard_append(filename)
+
+        self.status_var.set(
+            f"Copied '{filename}'"
+        )
+
+    # ------------------------------------------------------
+    # Keyboard Shortcuts
+    # ------------------------------------------------------
+
+    def register_shortcuts(self):
+
+        self.bind(
+            "<Control-o>",
+            lambda e: self.select_folder()
+        )
+
+        self.bind(
+            "<F5>",
+            lambda e: self.preview_files()
+        )
+
+        self.bind(
+            "<Escape>",
+            lambda e: self.on_close()
+        )
+
+    # ------------------------------------------------------
+    # Window Closing
+    # ------------------------------------------------------
+
+    def on_close(self):
+
+        if messagebox.askyesno(
+
+            APP_NAME,
+
+            "Exit FileFlow?"
+
+        ):
+
+            self.destroy()
+
+    # ------------------------------------------------------
+    # Finish Initialization
+    # ------------------------------------------------------
+
+    def initialize(self):
+
+        self.create_context_menu()
+
+        self.register_shortcuts()
+
+        self.protocol(
+            "WM_DELETE_WINDOW",
+            self.on_close
+        )
+
+        self.status_var.set("Ready")
+
+# ==========================================================
+# Main
+# ==========================================================
+
+if __name__ == "__main__":
+
+    try:
+
+        app = FileFlow()
+
+        app.initialize()
+
+        app.mainloop()
+
+    except Exception as e:
+
+        logging.exception(e)
+
+        traceback.print_exc()
+
+        messagebox.showerror(
+
+            APP_NAME,
+
+            f"A fatal error occurred.\n\n{e}"
+
+        )
+        
