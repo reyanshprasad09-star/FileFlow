@@ -1,64 +1,200 @@
-# FileFlow 📂
+# 📂 FileFlow
 
-**Organize your files effortlessly.**
+> A lightweight Windows desktop application that previews and organizes files intelligently.
 
-FileFlow is a lightweight Windows desktop application that helps you organize cluttered folders in just a few clicks. It automatically sorts files into categorized folders based on their names and file types.
+![Version](https://img.shields.io/badge/version-v0.2.0-blue)
+![Platform](https://img.shields.io/badge/platform-Windows-0078D6)
+![Language](https://img.shields.io/badge/Python-3.x-yellow)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-> ⚠️ **FileFlow v0.1.0 is an early release.** More features and improvements are planned for future updates.
+---
 
-## Features
+## ✨ Overview
 
-* 📂 Select any folder to organize
-* 🏷️ Automatically categorize files using keywords and file extensions
-* 📁 Create category folders automatically
-* ⚡ Fast and easy-to-use interface
-* 🖥️ Standalone Windows executable
+FileFlow is an open-source Windows application that automatically organizes files into categorized folders based on their filenames and file types.
 
-## Current Categories
+Unlike many basic file organizers, FileFlow lets you preview exactly where every file will go before any changes are made, giving you complete control over the organization process.
 
-* Documents
-* Images
-* Videos
-* Music
-* Programming
-* School
-* Games
-* Others
+---
 
-## Installation
+## 🚀 Features
 
-### Option 1: Download the executable
+- 📂 Automatic file organization
+- 👀 Preview Mode before organizing
+- 🗂 Smart categorization using filenames and extensions
+- 🖥 Clean and lightweight desktop interface
+- ⚡ Fast local processing
+- 📊 Organization summary after every run
+- 🔓 Open-source
 
-1. Go to the **Releases** section of this repository.
-2. Download the latest release ZIP file.
-3. Extract the ZIP file.
-4. Run `FileFlow.exe`.
+---
 
-### Option 2: Run from source
+## 🆕 What's New in v0.2.0
 
-1. Ensure Python 3.14 or later is installed.
-2. Download or clone this repository.
-3. Open a terminal in the project directory.
-4. Run:
+### Added
+
+- 👀 Preview Mode
+- 📋 File preview table
+- 📂 Selected folder display
+- 🚀 Confirmation before organizing files
+
+### Improved
+
+- Rebranded to **FileFlow**
+- Larger and cleaner interface
+- Better organization summary
+- Improved stability and error handling
+
+---
+
+## 📷 How It Works
+
+1. Launch FileFlow.
+2. Click **Select Folder**.
+3. Preview where each file will be moved.
+4. Click **Organize Files**.
+5. View the organization summary.
+
+---
+
+## 🧠 Smart Categories
+
+FileFlow currently organizes files into:
+
+- 📚 School
+- 💻 Programming
+- 🎵 Music
+- 🎮 Games
+- 🖼 Images
+- 🎥 Videos
+- 📄 Documents
+- 📦 Others
+
+---
+
+## ⌨ Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| Ctrl + O | Select Folder |
+| F5 | Refresh Preview |
+| Esc | Exit |
+
+---
+
+## 🛠 Installation
+
+### Option 1 (Recommended)
+
+Download the latest release from the **Releases** section.
+
+Extract the ZIP file and run:
+
+```
+FileFlow.exe
+```
+
+No installation required.
+
+---
+
+### Option 2
+
+Clone the repository.
+
+```bash
+git clone https://github.com/YOUR_USERNAME/FileFlow.git
+```
+
+Install Python 3 and run:
 
 ```bash
 python FileFlow.py
 ```
 
-## Building the Executable
+---
 
-If you want to build the application yourself:
+## 📦 Building the Executable
+
+Using PyInstaller:
 
 ```bash
-python -m PyInstaller --onefile --windowed FileFlow.py
+pyinstaller --onefile --windowed --icon=fileflow.ico FileFlow.py
 ```
 
-The generated executable will be located in the `dist` folder.
+The executable will be generated inside:
 
-## Disclaimer
+```
+dist/
+```
 
-FileFlow moves files within the selected folder. Although the application is designed to operate safely, it is recommended to back up important files before performing large-scale organization tasks.
+---
 
-## License
+## 📁 Project Structure
+
+```
+FileFlow
+│
+├── FileFlow.py
+├── LICENSE
+├── README.md
+├── .gitignore
+├── fileflow.ico
+└── dist/
+```
+
+---
+
+## 🗺 Roadmap
+
+### ✅ v0.1.0
+
+- Initial public release
+
+### ✅ v0.2.0
+
+- Preview Mode
+- Improved interface
+- Better organization summary
+
+### 🔜 Upcoming
+
+- ↩ Undo last organization
+- 📜 Organization history
+- 🎨 Improved UI
+- 🖱 Drag & Drop support
+- ⚙ Custom categories
+- 📂 Folder monitoring
+
+---
+
+## 🤝 Contributing
+
+Contributions, bug reports and feature suggestions are always welcome.
+
+If you'd like to improve FileFlow:
+
+1. Fork the repository
+2. Create a new branch
+3. Make your changes
+4. Submit a Pull Request
+
+---
+
+## 📄 License
 
 This project is licensed under the MIT License.
+
+See the **LICENSE** file for details.
+
+---
+
+## 👨‍💻 Developer
+
+Created by **Reyansh Prasad**
+
+GitHub: https://github.com/YOUR_USERNAME
+
+---
+
+⭐ If you like FileFlow, consider starring the repository.
